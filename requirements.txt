@@ -3,3 +3,4 @@ openai
 pymupdf
 arxiv
 requests
+gunicorn
