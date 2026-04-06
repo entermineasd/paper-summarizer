@@ -52,7 +52,7 @@ STYLE = """
     input[type=text]:focus { border-color: #1e3a8a; }
     .sort-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; font-size: 13px; color: #6b7280; 
  .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #dbeafe; border-top: 3px solid #1e3a8a; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
-@keyframes spin { 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+@keyframes spin { 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }
 </style>
 """
 
