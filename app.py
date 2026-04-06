@@ -123,6 +123,7 @@ def index():
     <div class='container'>
         <div class='card'>
             <h2 id='card-title'>📄 문서 입력</h2>
+	    <div id='result'></div>
             <span class='tab active' id='tab-btn-search' onclick='switchTab("search", this)'>🔎 논문 검색</span>
             <span class='tab' id='tab-btn-pdf' onclick='switchTab("pdf", this)'>📎 PDF 업로드</span>
             <span class='tab' id='tab-btn-text' onclick='switchTab("text", this)'>📝 텍스트 입력</span>
@@ -150,7 +151,7 @@ def index():
                 <button class='btn' id='text-analyze-btn' onclick='analyzeText()'>🔍 분석하기</button>
             </div>
 
-            <div id='result'></div>
+           
         </div>
     </div>
     <script>
