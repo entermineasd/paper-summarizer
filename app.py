@@ -2,7 +2,8 @@ from flask import Flask, request, render_template_string, jsonify
 from openai import OpenAI
 import os
 import json
-import fitz  # pymupdf
+import fitz
+import arxiv
 
 app = Flask(__name__)
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -26,8 +27,9 @@ STYLE = """
     .tab.active { background: #1e3a8a; color: white; border-color: #1e3a8a; }
     .tab-content { display: none; margin-top: 15px; }
     .tab-content.active { display: block; }
-    .btn { display: inline-block; padding: 11px 28px; background: #1e3a8a; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; margin-top: 12px; }
+    .btn { display: inline-block; padding: 11px 28px; background: #1e3a8a; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; margin-top: 12px; margin-right: 8px; }
     .btn:hover { background: #1e40af; }
+    .btn-sm { padding: 7px 16px; font-size: 13px; margin-top: 0; }
     .section { margin-bottom: 20px; }
     .section-title { font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
     .summary-box { background: #eff6ff; border-left: 4px solid #1e3a8a; padding: 15px 18px; border-radius: 6px; font-size: 14px; line-height: 1.8; }
@@ -36,6 +38,13 @@ STYLE = """
     .conclusion-box { background: #ecfdf5; border-left: 4px solid #10b981; padding: 15px 18px; border-radius: 6px; font-size: 14px; line-height: 1.8; }
     .loading { color: #888; font-size: 14px; margin-top: 15px; }
     .file-name { font-size: 13px; color: #1e3a8a; margin-top: 8px; font-weight: 600; }
+    .paper-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+    .paper-item:hover { border-color: #1e3a8a; background: #eff6ff; }
+    .paper-title { font-size: 14px; font-weight: 600; color: #1e3a8a; margin-bottom: 5px; }
+    .paper-authors { font-size: 12px; color: #6b7280; margin-bottom: 5px; }
+    .paper-abstract { font-size: 12px; color: #374151; line-height: 1.6; }
+    input[type=text] { width: 100%; padding: 11px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 10px; }
+    input[type=text]:focus { border-color: #1e3a8a; }
 </style>
 """
 
@@ -46,15 +55,22 @@ def index():
     <body>
     <div class='navbar'>
         <h1>📚 논문 & 학술 문서 요약기</h1>
-        <p>PDF 업로드 또는 텍스트 붙여넣기로 논문을 분석해요</p>
+        <p>PDF 업로드, 텍스트 입력, 또는 논문 자동 검색으로 분석해요</p>
     </div>
     <div class='container'>
         <div class='card'>
             <h2>📄 문서 입력</h2>
-            <span class='tab active' onclick='switchTab("pdf")'>📎 PDF 업로드</span>
-            <span class='tab' onclick='switchTab("text")'>📝 텍스트 입력</span>
+            <span class='tab active' onclick='switchTab("search", this)'>🔎 논문 검색</span>
+            <span class='tab' onclick='switchTab("pdf", this)'>📎 PDF 업로드</span>
+            <span class='tab' onclick='switchTab("text", this)'>📝 텍스트 입력</span>
 
-            <div id='tab-pdf' class='tab-content active'>
+            <div id='tab-search' class='tab-content active'>
+                <input type='text' id='searchInput' placeholder='검색어를 입력해요 (예: machine learning, sleep deprivation)'>
+                <button class='btn' onclick='searchPapers()'>🔍 논문 검색</button>
+                <div id='searchResult'></div>
+            </div>
+
+            <div id='tab-pdf' class='tab-content'>
                 <div class='upload-area' onclick='document.getElementById("fileInput").click()'>
                     <input type='file' id='fileInput' accept='.pdf' onchange='handleFile(this)'>
                     <div style='font-size:32px;margin-bottom:8px;'>📎</div>
@@ -62,25 +78,26 @@ def index():
                     <div style='font-size:12px;margin-top:5px;'>최대 10MB</div>
                 </div>
                 <div id='fileName' class='file-name'></div>
+                <button class='btn' onclick='analyzePdf()'>🔍 분석하기</button>
             </div>
 
             <div id='tab-text' class='tab-content'>
                 <textarea id='textInput' placeholder='논문이나 학술 자료 텍스트를 붙여넣어요...'></textarea>
+                <button class='btn' onclick='analyzeText()'>🔍 분석하기</button>
             </div>
 
-            <button class='btn' onclick='analyze()'>🔍 분석하기</button>
             <div id='result'></div>
         </div>
     </div>
     <script>
-        let currentTab = 'pdf';
+        let currentTab = 'search';
         let pdfFile = null;
 
-        function switchTab(tab) {{
+        function switchTab(tab, el) {{
             currentTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
+            el.classList.add('active');
             document.getElementById('tab-' + tab).classList.add('active');
         }}
 
@@ -89,27 +106,65 @@ def index():
             document.getElementById('fileName').textContent = '✅ ' + pdfFile.name;
         }}
 
-        async function analyze() {{
-            document.getElementById('result').innerHTML = '<p class="loading">분석 중... (PDF는 시간이 조금 걸려요)</p>';
+        async function searchPapers() {{
+            const query = document.getElementById('searchInput').value;
+            if (!query.trim()) return;
+            document.getElementById('searchResult').innerHTML = '<p class="loading">검색 중...</p>';
+            const res = await fetch('/search', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{query: query}})
+            }});
+            const papers = await res.json();
+            let html = '<div style="margin-top:15px;">';
+            papers.forEach((p, i) => {{
+                html += `<div class='paper-item' onclick='analyzePaperUrl("${{p.pdf_url}}")'>
+                    <div class='paper-title'>${{p.title}}</div>
+                    <div class='paper-authors'>${{p.authors}}</div>
+                    <div class='paper-abstract'>${{p.abstract}}</div>
+                    <div style='margin-top:8px;'><span class='tag'>클릭해서 분석하기</span></div>
+                </div>`;
+            }});
+            html += '</div>';
+            document.getElementById('searchResult').innerHTML = html;
+        }}
 
-            let res;
-            if (currentTab === 'pdf' && pdfFile) {{
-                const formData = new FormData();
-                formData.append('file', pdfFile);
-                res = await fetch('/analyze-pdf', {{ method: 'POST', body: formData }});
-            }} else {{
-                const text = document.getElementById('textInput').value;
-                if (!text.trim()) {{ document.getElementById('result').innerHTML = ''; return; }}
-                res = await fetch('/analyze-text', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{text: text}})
-                }});
-            }}
-
+        async function analyzePaperUrl(url) {{
+            document.getElementById('result').innerHTML = '<p class="loading">논문 분석 중... (잠시 기다려요)</p>';
+            const res = await fetch('/analyze-url', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{url: url}})
+            }});
             const data = await res.json();
-            if (data.error) {{ document.getElementById('result').innerHTML = '<p style="color:red;">오류: ' + data.error + '</p>'; return; }}
+            showResult(data);
+        }}
 
+        async function analyzePdf() {{
+            if (!pdfFile) return;
+            document.getElementById('result').innerHTML = '<p class="loading">분석 중...</p>';
+            const formData = new FormData();
+            formData.append('file', pdfFile);
+            const res = await fetch('/analyze-pdf', {{ method: 'POST', body: formData }});
+            const data = await res.json();
+            showResult(data);
+        }}
+
+        async function analyzeText() {{
+            const text = document.getElementById('textInput').value;
+            if (!text.trim()) return;
+            document.getElementById('result').innerHTML = '<p class="loading">분석 중...</p>';
+            const res = await fetch('/analyze-text', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{text: text}})
+            }});
+            const data = await res.json();
+            showResult(data);
+        }}
+
+        function showResult(data) {{
+            if (data.error) {{ document.getElementById('result').innerHTML = '<p style="color:red;">오류: ' + data.error + '</p>'; return; }}
             let html = '<br>';
             html += '<div class="section"><div class="section-title">📌 핵심 요약</div>';
             html += `<div class="summary-box">${{data.summary}}</div></div>`;
@@ -145,10 +200,36 @@ def ai_analyze(text):
     )
     return json.loads(response.choices[0].message.content)
 
-@app.route('/analyze-text', methods=['POST'])
-def analyze_text():
+@app.route('/search', methods=['POST'])
+def search():
     try:
-        text = request.json['text']
+        query = request.json['query']
+        search_client = arxiv.Client()
+        results = search_client.results(arxiv.Search(query=query, max_results=5))
+        papers = []
+        for r in results:
+            papers.append({
+                "title": r.title,
+                "authors": ", ".join([a.name for a in r.authors[:3]]),
+                "abstract": r.summary[:200] + "...",
+                "pdf_url": r.pdf_url
+            })
+        return jsonify(papers)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/analyze-url', methods=['POST'])
+def analyze_url():
+    try:
+        import requests
+        url = request.json['url']
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers)
+        pdf = fitz.open(stream=response.content, filetype="pdf")
+        text = ""
+        for page in pdf:
+            text += page.get_text()
+        pdf.close()
         return jsonify(ai_analyze(text))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -162,6 +243,14 @@ def analyze_pdf():
         for page in pdf:
             text += page.get_text()
         pdf.close()
+        return jsonify(ai_analyze(text))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/analyze-text', methods=['POST'])
+def analyze_text():
+    try:
+        text = request.json['text']
         return jsonify(ai_analyze(text))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
