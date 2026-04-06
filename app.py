@@ -287,7 +287,7 @@ def index():
                 html += `<a href="${{sourceUrl}}" target="_blank" class="paper-link">${{sourceUrl}}</a></div>`;
             }}
             document.getElementById('result').innerHTML = html;
-	    document.getElementById('result').scrollIntoView({{behavior: 'smooth'}});
+	    window.scrollTo({{top: 0, behavior: 'smooth'}});
         }}
     </script>
     </body></html>
