@@ -50,9 +50,9 @@ STYLE = """
     .paper-link { font-size: 12px; color: #4f46e5; margin-top: 6px; display: inline-block; }
     input[type=text] { width: 100%; padding: 11px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 10px; }
     input[type=text]:focus { border-color: #1e3a8a; }
-    .sort-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; font-size: 13px; color: #6b7280; 
- .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #dbeafe; border-top: 3px solid #1e3a8a; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .result-card { background: white; border-radius: 12px; padding: 30px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); display: none; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #dbeafe; border-top: 2px solid #1e3a8a; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>
 """
 
@@ -71,14 +71,11 @@ TEXTS = {
         "text_placeholder": "논문이나 학술 자료 텍스트를 붙여넣어요...",
         "loading": "분석 중...",
         "searching": "검색 중...",
-        "sort_label": "정렬:",
-        "sort_default": "기본순",
-        "sort_alpha": "알파벳순",
+        "sort_alpha": "알파벳순 정렬",
         "click_analyze": "클릭해서 분석하기",
         "summary_title": "📌 핵심 요약",
         "keywords_title": "🏷 주요 키워드",
         "source_title": "📎 출처",
-        "lang": "언어",
     },
     "en": {
         "title": "📚 Paper & Academic Document Summarizer",
@@ -94,14 +91,11 @@ TEXTS = {
         "text_placeholder": "Paste your paper or academic text here...",
         "loading": "Analyzing...",
         "searching": "Searching...",
-        "sort_label": "Sort:",
-        "sort_default": "Default",
-        "sort_alpha": "Alphabetical",
+        "sort_alpha": "Sort Alphabetically",
         "click_analyze": "Click to analyze",
         "summary_title": "📌 Summary",
         "keywords_title": "🏷 Keywords",
         "source_title": "📎 Source",
-        "lang": "Language",
     }
 }
 
@@ -121,15 +115,17 @@ def index():
         </div>
     </div>
     <div class='container'>
+        <div class='result-card' id='result-card'>
+            <div id='result'></div>
+        </div>
         <div class='card'>
             <h2 id='card-title'>📄 문서 입력</h2>
-	    <div id='result'></div>
             <span class='tab active' id='tab-btn-search' onclick='switchTab("search", this)'>🔎 논문 검색</span>
             <span class='tab' id='tab-btn-pdf' onclick='switchTab("pdf", this)'>📎 PDF 업로드</span>
             <span class='tab' id='tab-btn-text' onclick='switchTab("text", this)'>📝 텍스트 입력</span>
 
             <div id='tab-search' class='tab-content active'>
-                <input type='text' id='searchInput' placeholder='검색어를 입력해요 (예: machine learning)'>
+                <input type='text' id='searchInput' placeholder='검색어를 입력해요'>
                 <button class='btn' id='search-btn' onclick='searchPapers()'>🔍 논문 검색</button>
                 <button class='btn btn-outline' id='sort-alpha-btn' onclick='sortAlpha()' style='display:none;'>알파벳순 정렬</button>
                 <div id='searchResult'></div>
@@ -150,8 +146,6 @@ def index():
                 <textarea id='textInput' placeholder='논문이나 학술 자료 텍스트를 붙여넣어요...'></textarea>
                 <button class='btn' id='text-analyze-btn' onclick='analyzeText()'>🔍 분석하기</button>
             </div>
-
-           
         </div>
     </div>
     <script>
@@ -159,7 +153,6 @@ def index():
         let currentTab = 'search';
         let pdfFile = null;
         let allPapers = [];
-
         const texts = {json.dumps(TEXTS)};
 
         function setLang(lang) {{
@@ -179,9 +172,6 @@ def index():
             document.getElementById('textInput').placeholder = t.text_placeholder;
             document.getElementById('pdf-analyze-btn').textContent = t.analyze_btn;
             document.getElementById('text-analyze-btn').textContent = t.analyze_btn;
-            if (document.getElementById('sort-alpha-btn').style.display !== 'none') {{
-                document.getElementById('sort-alpha-btn').textContent = t.sort_alpha;
-            }}
         }}
 
         function switchTab(tab, el) {{
@@ -238,7 +228,9 @@ def index():
 
         async function analyzePaperUrl(url) {{
             const t = texts[currentLang];
-            document.getElementById('result').innerHTML = `<p class="loading">${{t.loading}}</p>`;
+            document.getElementById('result-card').style.display = 'block';
+            document.getElementById('result').innerHTML = `<p class="loading"><span class="spinner"></span>${{t.loading}}</p>`;
+            document.getElementById('result-card').scrollIntoView({{behavior: 'smooth'}});
             const res = await fetch('/analyze-url', {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
@@ -251,7 +243,9 @@ def index():
         async function analyzePdf() {{
             if (!pdfFile) return;
             const t = texts[currentLang];
-            document.getElementById('result').innerHTML = `<p class="loading">${{t.loading}}</p>`;
+            document.getElementById('result-card').style.display = 'block';
+            document.getElementById('result').innerHTML = `<p class="loading"><span class="spinner"></span>${{t.loading}}</p>`;
+            document.getElementById('result-card').scrollIntoView({{behavior: 'smooth'}});
             const formData = new FormData();
             formData.append('file', pdfFile);
             formData.append('lang', currentLang);
@@ -264,7 +258,9 @@ def index():
             const text = document.getElementById('textInput').value;
             if (!text.trim()) return;
             const t = texts[currentLang];
-            document.getElementById('result').innerHTML = `<p class="loading">${{t.loading}}</p>`;
+            document.getElementById('result-card').style.display = 'block';
+            document.getElementById('result').innerHTML = `<p class="loading"><span class="spinner"></span>${{t.loading}}</p>`;
+            document.getElementById('result-card').scrollIntoView({{behavior: 'smooth'}});
             const res = await fetch('/analyze-text', {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
@@ -276,8 +272,11 @@ def index():
 
         function showResult(data, sourceUrl) {{
             const t = texts[currentLang];
-            if (data.error) {{ document.getElementById('result').innerHTML = '<p style="color:red;">Error: ' + data.error + '</p>'; return; }}
-            let html = '<br>';
+            if (data.error) {{
+                document.getElementById('result').innerHTML = '<p style="color:red;">Error: ' + data.error + '</p>';
+                return;
+            }}
+            let html = '';
             html += `<div class="section"><div class="section-title">${{t.summary_title}}</div>`;
             html += `<div class="summary-box">${{data.summary}}</div></div>`;
             html += `<div class="section"><div class="section-title">${{t.keywords_title}}</div><div>`;
@@ -288,7 +287,6 @@ def index():
                 html += `<a href="${{sourceUrl}}" target="_blank" class="paper-link">${{sourceUrl}}</a></div>`;
             }}
             document.getElementById('result').innerHTML = html;
-	    window.scrollTo({{top: 0, behavior: 'smooth'}});
         }}
     </script>
     </body></html>
@@ -296,14 +294,14 @@ def index():
 
 def ai_analyze(text, lang='ko'):
     text = text[:8000]
-    lang_instruction = "한국어로 답해줘" if lang == 'ko' else "Answer in English"
+    lang_instruction = "반드시 한국어로 답해줘" if lang == 'ko' else "You must answer in English only"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": f'''너는 학술 논문 분석 전문가야. 반드시 JSON만 출력해. 다른 텍스트 절대 금지. {lang_instruction}.
-형식: {{
-    "summary": "핵심 내용 5~7줄 요약 (줄바꿈은 <br>으로)",
-    "keywords": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"]
+            {"role": "system", "content": f'''You are an academic paper analysis expert. Output JSON only. No other text allowed. {lang_instruction}.
+Format: {{
+    "summary": "5-7 line summary (use <br> for line breaks)",
+    "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
 }}'''},
             {"role": "user", "content": text}
         ],
@@ -316,7 +314,7 @@ def search():
     try:
         query = request.json['query']
         search_client = arxiv.Client()
-        results = list(search_client.results(arxiv.Search(query=query, max_results=10)))
+        results = list(search_client.results(arxiv.Search(query=query, max_results=5)))
         papers = []
         for r in results:
             papers.append({
