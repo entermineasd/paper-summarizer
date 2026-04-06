@@ -50,7 +50,9 @@ STYLE = """
     .paper-link { font-size: 12px; color: #4f46e5; margin-top: 6px; display: inline-block; }
     input[type=text] { width: 100%; padding: 11px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 10px; }
     input[type=text]:focus { border-color: #1e3a8a; }
-    .sort-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; font-size: 13px; color: #6b7280; }
+    .sort-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; font-size: 13px; color: #6b7280; 
+ .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #dbeafe; border-top: 3px solid #1e3a8a; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+@keyframes spin { 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
 </style>
 """
 
@@ -215,7 +217,7 @@ def index():
             const query = document.getElementById('searchInput').value;
             if (!query.trim()) return;
             const t = texts[currentLang];
-            document.getElementById('searchResult').innerHTML = `<p class="loading">${{t.searching}}</p>`;
+            document.getElementById('searchResult').innerHTML = `<p class="loading"><span class="spinner"></span>${{t.searching}}</p>`;
             document.getElementById('sort-alpha-btn').style.display = 'none';
             const res = await fetch('/search', {{
                 method: 'POST',
